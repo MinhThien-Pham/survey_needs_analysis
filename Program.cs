@@ -1,29 +1,20 @@
 using SurveyNeeds.Learning;
 
-// Create one survey object.
-var survey = new SurveyResponse
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapPost("/analyze", (SurveyResponse survey) =>
 {
-    Id = 1,
-    HouseholdSize = 4,
-    EmploymentStatus = "part-time",
-    ResponseText = "i lost my job and cannot afford food or electricity"
-};
+    List<string> needs = AnalyzeNeeds(survey.ResponseText);
 
-// Pass the survey text into our analysis function.
-List<string> needs = AnalyzeNeeds(survey.ResponseText);
+    return Results.Ok(new
+    {
+        needs = needs
+    });
+});
 
-// Print the original survey.
-Console.WriteLine("Survey:");
-Console.WriteLine(survey.ResponseText);
-Console.WriteLine("\nDetected needs:");
-// Print every detected need.
-foreach (string need in needs)
-{
-    Console.WriteLine(need);
-}
+app.Run();
 
-// Takes survey text as input.
-// Returns a list of detected needs.
 static List<string> AnalyzeNeeds(string text)
 {
     // Start with an empty result list.
