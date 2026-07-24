@@ -1,10 +1,11 @@
-using MySql.Data.MySqlClient;
+using Microsoft.EntityFrameworkCore;
 using SurveyNeeds.Learning;
 
 var builder = WebApplication.CreateBuilder(args);
-var app = builder.Build();
 
 string connectionString = builder.Configuration.GetConnectionString("SurveyNeeds") ?? throw new InvalidOperationException("Database connection string 'SurveyNeeds' was not found.");
+builder.Services.AddDbContext<SurveyNeedsContext>(options => options.UseMySQL(connectionString));
+var app = builder.Build();
 
 app.MapPost("/analyze", (SurveyResponse survey) =>
 {
@@ -16,73 +17,30 @@ app.MapPost("/analyze", (SurveyResponse survey) =>
     });
 });
 
-app.MapPost("/surveys", (SurveyResponse survey) =>
+app.MapPost("/surveys", (SurveyResponse survey, SurveyNeedsContext db) =>
 {
-    using var connection = new MySqlConnection(connectionString);
-    connection.Open();
-
-    string sql = "INSERT INTO surveys (household_size, employment_status, response_text) VALUES (@householdSize, @employmentStatus, @responseText);";
-    using var command = new MySqlCommand(sql, connection);
-    command.Parameters.AddWithValue("@householdSize", survey.HouseholdSize);
-    command.Parameters.AddWithValue("@employmentStatus", survey.EmploymentStatus);
-    command.Parameters.AddWithValue("@responseText", survey.ResponseText);
-    command.ExecuteNonQuery();
-
-    survey.Id = (int)command.LastInsertedId;
+    db.Surveys.Add(survey);
+    db.SaveChanges();
     return Results.Created($"/surveys/{survey.Id}", survey);
 });
 
 
 // Get all saved surveys.
-app.MapGet("/surveys", () =>
+app.MapGet("/surveys", (SurveyNeedsContext db) =>
 {
-    var surveys = new List<SurveyResponse>();
-
-    using var connection = new MySqlConnection(connectionString);
-    connection.Open();
-
-    string sql = "SELECT id, household_size, employment_status, response_text FROM surveys;";
-    using var command = new MySqlCommand(sql, connection);
-    using MySqlDataReader reader = command.ExecuteReader();
-
-    while (reader.Read())
-    {
-        var survey = new SurveyResponse
-        {
-            Id = reader.GetInt32("id"),
-            HouseholdSize = reader.GetInt32("household_size"),
-            EmploymentStatus = reader.GetString("employment_status"),
-            ResponseText = reader.GetString("response_text")
-        };
-        surveys.Add(survey);
-    }
-
+    List<SurveyResponse> surveys = db.Surveys.ToList();
     return Results.Ok(surveys);
 });
 
 
 // Get one survey by its ID.
-app.MapGet("/surveys/{id:int}", (int id) =>
+app.MapGet("/surveys/{id:int}", (int id, SurveyNeedsContext db) =>
 {
-    using var connection = new MySqlConnection(connectionString);
-    connection.Open();
-
-    string sql = "SELECT id, household_size, employment_status, response_text FROM surveys WHERE id = @id;";
-    using var command = new MySqlCommand(sql, connection);
-    command.Parameters.AddWithValue("@id", id);
-    using MySqlDataReader reader = command.ExecuteReader();
-
-    if (!reader.Read())
-        return Results.NotFound();
-
-    var survey = new SurveyResponse
+    SurveyResponse? survey = db.Surveys.Find(id);
+    if (survey == null)
     {
-        Id = reader.GetInt32("id"),
-        HouseholdSize = reader.GetInt32("household_size"),
-        EmploymentStatus = reader.GetString("employment_status"),
-        ResponseText = reader.GetString("response_text")
-    };
-
+        return Results.NotFound();
+    }
     return Results.Ok(survey);
 });
 
