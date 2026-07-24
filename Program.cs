@@ -38,10 +38,28 @@ app.MapGet("/surveys/{id:int}", (int id, SurveyNeedsContext db) =>
 {
     SurveyResponse? survey = db.Surveys.Find(id);
     if (survey == null)
-    {
         return Results.NotFound();
-    }
+
     return Results.Ok(survey);
+});
+
+// Load a saved survey from MySQL and analyze its text.
+app.MapPost("/surveys/{id:int}/analyze", (int id, SurveyNeedsContext db) =>
+{
+    // Find the saved survey by its primary key.
+    SurveyResponse? survey = db.Surveys.Find(id);
+
+    if (survey is null)
+        return Results.NotFound();
+
+    // Reuse the rule-based analysis from Step 1.
+    List<string> needs = AnalyzeNeeds(survey.ResponseText);
+
+    return Results.Ok(new
+    {
+        surveyId = survey.Id,
+        needs
+    });
 });
 
 app.Run();
